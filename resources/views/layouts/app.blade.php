@@ -15,10 +15,10 @@
 
     <!-- Styles -->
     <link rel="stylesheet" href="{{ asset('css/app.css') }}">
-
     <!-- Scripts -->
     @section('scripts')
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
+        <script src="{{ asset('js/app.js') }}"></script>
+        @vite(['css/app.css', 'js/app.js'])
     @show
 </head>
 <body>

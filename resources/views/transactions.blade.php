@@ -8,7 +8,7 @@
                     <div>
                         <form method="GET" action="{{ route('transactions') }}" class="row g-3">
                             <div class="col-auto">
-                                <label for="description_search">Поиск по описанию</label>
+                                <label for="description_search">Найти по описанию</label>
                                 <input type="text" name="description_search" id="description_search">
                             </div>
 
