@@ -2,17 +2,9 @@
 
 namespace App\Console\Commands;
 
-use App\Dictionary\Currency;
-use App\Dictionary\TransactionDirection;
-use App\Models\Transaction;
-use App\Models\User;
-use App\Models\UserBalance;
+use App\Services\TransactionService;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\DB;
-use InvalidArgumentException;
-use PDOException;
 use Symfony\Component\Console\Command\Command as SymfonyCommand;
-use Throwable;
 
 class CreateTransaction extends Command
 {
@@ -31,6 +23,26 @@ class CreateTransaction extends Command
     protected $description = 'Command for create transaction';
 
     /**
+     * The transaction service instance.
+     *
+     * @var \App\Services\TransactionService
+     */
+    protected $transactionService;
+
+    /**
+     * Create a new command instance.
+     *
+     * @param  \App\Services\TransactionService  $transactionService
+     * @return void
+     */
+    public function __construct(TransactionService $transactionService)
+    {
+        parent::__construct();
+
+        $this->transactionService = $transactionService;
+    }
+
+    /**
      * Execute the console command.
      *
      * @return int
@@ -41,118 +53,27 @@ class CreateTransaction extends Command
         $direction = $this->argument('direction');
         $amount = (float) $this->argument('amount');
         $currency = $this->argument('currency');
-        $description = htmlspecialchars($this->argument('description'));
+        $description = $this->argument('description');
+        if ($description === null) {
+            $description = '';
+        } else {
+            $description = htmlspecialchars($description);
+        }
 
-        $user = User::firstWhere([
-            'email' => $email,
-        ]);
+        $result[] = $this->transactionService->create(
+            $email,
+            $direction,
+            $amount,
+            $currency,
+            $description
+        );
 
-        if (!$user) {
-            $this->error(sprintf('User with email `%s` not found', $email));
-
+        if (isset($result)) {
+            $this->info('Transaction successfully completed');
+            return SymfonyCommand::SUCCESS;
+        } else {
+            $this->error($result->getMessage());
             return SymfonyCommand::FAILURE;
-        }
-
-        if (!in_array($direction, TransactionDirection::getList(), true)) {
-            $this->error(sprintf('Direction must be equal one of [%s]', implode(', ', TransactionDirection::getList())));
-
-            return SymfonyCommand::FAILURE;
-        }
-
-        if ($amount <= 0) {
-            $this->error('Amount must be greater than zero');
-
-            return SymfonyCommand::FAILURE;
-        }
-
-        if (!in_array($currency, Currency::getList(), true)) {
-            $this->error(sprintf('Currency must be equal one of [%s]', implode(', ', Currency::getList())));
-
-            return SymfonyCommand::FAILURE;
-        }
-
-        try {
-            DB::beginTransaction();
-
-            $this->createTransaction(
-                $user,
-                $direction,
-                $amount,
-                $currency,
-                $description,
-            );
-
-            DB::commit();
-        } catch (Throwable $e) {
-            DB::rollBack();
-
-            $this->error(sprintf('Undefined exception: %s', $e->getMessage()));
-
-            return SymfonyCommand::FAILURE;
-        }
-
-        $this->info('Transaction successfully completed');
-
-        return SymfonyCommand::SUCCESS;
-    }
-
-    private function createTransaction(
-        User $user,
-        string $direction,
-        float $amount,
-        string $currency,
-        ?string $description = null
-    ) {
-        $transaction = Transaction::create([
-            'user_id' => $user->id,
-            'amount' => $amount,
-            'currency' => $currency,
-            'direction' => $direction,
-            'description' => $description ?: null,
-        ]);
-
-        $userBalance = UserBalance::firstWhere([
-            'user_id' => $user->id,
-            'currency' => $currency,
-        ]);
-
-        if (!$userBalance) {
-            $userBalance = UserBalance::create([
-                'user_id' => $user->id,
-                'balance' => 0,
-                'currency' => $currency,
-            ]);
-        }
-
-        $this->changeBalance($direction, $userBalance, $amount);
-
-        $transaction->save();
-        $userBalance->save();
-    }
-
-    private function changeBalance(string $direction, UserBalance $userBalance, float $amount)
-    {
-        if ($direction === TransactionDirection::IN) {
-            $userBalance->balance += $amount;
-
-            return $userBalance;
-        }
-
-        if ($direction === TransactionDirection::OUT) {
-            $this->checkBalance($userBalance->balance, $amount);
-
-            $userBalance->balance -= $amount;
-
-            return $userBalance;
-        }
-
-        throw new InvalidArgumentException('Unexpected direction');
-    }
-
-    private function checkBalance(float $balance, float $subAmount)
-    {
-        if ($balance < $subAmount) {
-            throw new InvalidArgumentException('There are not enough funds on the user account');
         }
     }
 }
