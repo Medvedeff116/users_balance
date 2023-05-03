@@ -44,17 +44,20 @@ class TransactionService
         try {
             DB::beginTransaction();
 
+            $userBalance = UserBalance::firstOrCreate([
+                'user_id' => $user->id,
+                'currency' => $currency,
+            ], [
+                'balance' => 0,
+            ]);
+
             $transaction = Transaction::create([
                 'user_id' => $user->id,
+                'user_balance_id' => $userBalance->id,
                 'amount' => $amount,
                 'currency' => $currency,
                 'direction' => $direction,
                 'description' => $description ?: null,
-            ]);
-
-            $userBalance = UserBalance::firstWhere([
-                'user_id' => $user->id,
-                'currency' => $currency,
             ]);
 
             if (!$userBalance) {
@@ -75,8 +78,9 @@ class TransactionService
             }
 
             $userBalance->save();
+            $userBalance->lockForUpdate();
             $transaction->save();
-            $this->lookForUpdate($amount, $currency, $userBalance);
+
 
             DB::commit();
         } catch (\Throwable $e) {
@@ -93,19 +97,4 @@ class TransactionService
         }
     }
 
-    private function lookForUpdate(float $amount, string $currency, UserBalance $userBalance)
-    {
-        $threshold = 1000;
-        $blockSize = 100;
-
-        $totalAmount = $userBalance->balance + $amount;
-
-        if ($totalAmount >= $threshold) {
-            $blocks = ceil($totalAmount / $blockSize);
-
-            for ($i = 0; $i < $blocks; $i++) {
-                TransactionService::dispatch($currency, $blockSize);
-            }
-        }
-    }
 }
