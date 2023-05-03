@@ -67,7 +67,7 @@ class TransactionService
                     'currency' => $currency,
                 ]);
             }
-
+            sleep(30);
             if ($direction === TransactionDirection::IN) {
                 $userBalance->balance += $amount;
             } elseif ($direction === TransactionDirection::OUT) {
