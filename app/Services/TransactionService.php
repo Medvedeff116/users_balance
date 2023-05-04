@@ -44,12 +44,10 @@ class TransactionService
         try {
             DB::beginTransaction();
 
-            $userBalance = UserBalance::firstOrCreate([
-                'user_id' => $user->id,
-                'currency' => $currency,
-            ], [
-                'balance' => 0,
-            ]);
+            $userBalance = UserBalance::where('user_id', $user->id)
+                ->where('currency', $currency)
+                ->lockForUpdate()
+                ->first();
 
             $transaction = Transaction::create([
                 'user_id' => $user->id,
@@ -78,9 +76,7 @@ class TransactionService
             }
 
             $userBalance->save();
-            $userBalance->lockForUpdate();
             $transaction->save();
-
 
             DB::commit();
         } catch (\Throwable $e) {
